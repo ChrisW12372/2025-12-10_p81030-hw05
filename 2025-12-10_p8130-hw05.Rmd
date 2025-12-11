@@ -2,29 +2,257 @@
 title: "2025-12-10_p8130-hw05"
 author: "Chris"
 date: "2025-12-11"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cosmo
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+```{r include = FALSE}
+library(tidyverse)
+library(glmnet)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+# Problem One
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r}
+df_hba1c <- read_csv("data/HbA1c.csv")|>
+  janitor::clean_names() |>
+  rename(id = x1)
 
-```{r cars}
-summary(cars)
+df_hba1c_val <- read_csv("data/HbA1c_val.csv") |>
+  janitor::clean_names() |>
+  rename(id = x1)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+## Question a
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+mlr_fit <- lm(hba1c ~ ., data = df_hba1c)
+summary(mlr_fit)
+
+plot(mlr_fit)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Question b
+
+
+```{r}
+y <- df_hba1c$hba1c
+X <- model.matrix(hba1c ~ ., data = df_hba1c)[ ,-1]
+
+# 10 fold cross validation
+cv_10 <- cv.glmnet(X, y, alpha = 1, nfolds = 10)
+
+min_lambda <- cv_10$lambda.min
+lambda_1se <- cv_10$lambda.1se
+
+# LASSO
+
+fit_min <- glmnet(X, y, alpha = 1, lambda = min_lambda)
+fit_1se <- glmnet(X, y, alpha = 1, lambda = lambda_1se)
+
+coef_min  <- coef(fit_min)
+coef_1se  <- coef(fit_1se)
+```
+
+
+## Question c
+
+```{r}
+# fitted values
+pred_min <- predict(cv_10, newx = X, s = "lambda.min")
+pred_1se <- predict(cv_10, newx = X, s = "lambda.1se")
+
+# residuals
+resid_min <- y - pred_min
+resid_1se <- y - pred_1se
+
+# MSPE
+mspe_min <- mean((resid_min)^2)
+mspe_1se <- mean((resid_1se)^2)
+
+mspe_min
+mspe_1se
+```
+
+
+
+```{r}
+# plot residual vs fitted for lambda.min
+plot(pred_min, resid_min, 
+     main = "Residuals vs Fitted (lambda.min)",
+     xlab = "Fitted values", 
+     ylab = "Residuals")
+abline(h = 0, col = "red")
+
+```
+
+
+```{r}
+# plot residual vs fitted for lambda.1se
+plot(pred_1se, resid_1se, 
+     main = "Residuals vs Fitted (lambda.1se)",
+     xlab = "Fitted values", 
+     ylab = "Residuals")
+abline(h = 0, col = "red")
+```
+
+
+
+## Question d
+
+
+```{r}
+X_val <- model.matrix(hba1c ~ ., data = df_hba1c_val)[, -1]
+y_val <- df_hba1c_val$hba1c
+
+pred_min_val <- predict(cv_10, newx = X_val, s = "lambda.min")
+pred_1se_val <- predict(cv_10, newx = X_val, s = "lambda.1se")
+
+mspe_min_val <- mean((y_val - pred_min_val)^2)
+mspe_1se_val <- mean((y_val - pred_1se_val)^2)
+
+mspe_min_val
+mspe_1se_val
+```
+
+
+
+# Problem Two
+
+
+```{r}
+df_asthma <- read_csv("data/asthma.csv") |>
+  janitor::clean_names() |>
+  rename(id = x1)
+```
+
+
+## Question a
+
+```{r}
+fit_asthma <- lm(symptom_sev ~ pm25 + activity + smoke_exposure,
+                 data = df_asthma)
+
+
+resid_asthma <- residuals(fit_asthma)
+abs_resid_asthma <- abs(resid_asthma)
+```
+
+
+```{r}
+par(mfrow = c(2, 3))
+
+## 1. pm25
+plot(df_asthma$pm25, resid_asthma,
+     xlab = "pm25",
+     ylab = "Residuals",
+     main = "Residuals vs pm25")
+abline(h = 0, col = "red")
+
+plot(df_asthma$pm25, abs_resid_asthma,
+     xlab = "pm25",
+     ylab = "|Residuals|",
+     main = "|Residuals| vs pm25")
+
+## 2. activity
+plot(df_asthma$activity, resid_asthma,
+     xlab = "activity",
+     ylab = "Residuals",
+     main = "Residuals vs activity")
+abline(h = 0, col = "red")
+
+plot(df_asthma$activity, abs_resid_asthma,
+     xlab = "activity",
+     ylab = "|Residuals|",
+     main = "|Residuals| vs activity")
+
+## 3. smoke_exposure
+plot(df_asthma$smoke_exposure, resid_asthma,
+     xlab = "smoke_exposure",
+     ylab = "Residuals",
+     main = "Residuals vs smoke_exposure")
+abline(h = 0, col = "red")
+
+plot(df_asthma$smoke_exposure, abs_resid_asthma,
+     xlab = "smoke_exposure",
+     ylab = "|Residuals|",
+     main = "|Residuals| vs smoke_exposure")
+
+```
+
+
+## Question b
+
+```{r}
+
+resid_sq <- resid_asthma^2
+
+bp_pm25 <- lm(resid_sq ~ df_asthma$pm25)
+
+summary(bp_pm25)
+
+```
+
+
+
+## Question c
+
+
+```{r}
+var_hat <- predict(bp_pm25)
+
+var_hat <- pmax(var_hat, 1e-6)
+
+weights <- 1 / var_hat
+
+fit_wls <- lm(symptom_sev ~ pm25 + activity + smoke_exposure,
+              data = df_asthma,
+              weights = weights)
+
+summary(fit_wls)
+
+summary(fit_asthma)
+
+
+```
+
+
+
+## Question d
+
+```{r}
+# Weighted residuals: sqrt(w_i) * e_i
+weighted_resid <- sqrt(weights) * residuals(fit_wls)
+
+# Plot vs PM2.5
+plot(df_asthma$pm25, weighted_resid,
+     xlab = "PM2.5",
+     ylab = "sqrt(w_i) * e_i",
+     main = "Weighted residuals vs PM2.5")
+abline(h = 0, col = "red")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
